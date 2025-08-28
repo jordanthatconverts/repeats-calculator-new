@@ -5,95 +5,267 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RepEats Revenue Calculator</title>
   <style>
-    :root {
-      --bg: #0b0d10;
-      --card: #11151a;
-      --muted: #9fb0c3;
-      --text: #e8edf4;
-      --brand: #7c5cff;
-      --brand2: #0065a8;
+    :root{
+      --bg:#0b0d10; --card:#11151a; --ink:#0f1318;
+      --text:#e8edf4; --muted:#9fb0c3; --border:rgba(255,255,255,.12);
+      --brand:#7c5cff; --brand2:#00e5a8;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0b0d10,#0e1217);color:var(--text);
+         font:400 16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
+    .container{max-width:1200px;margin:0 auto;padding:32px}
+    h1{margin:0 0 10px;font-size:28px}
+    p.lead{margin:0 0 18px;color:var(--muted)}
+    .grid{display:grid;gap:20px}
+    @media(min-width:900px){.grid-2{grid-template-columns:1fr 1fr}}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;
+          box-shadow:0 10px 30px rgba(0,0,0,.25);overflow-x:auto}
+    h2{margin:0 0 12px;font-size:20px}
+    label{font-size:13px;color:var(--muted);display:block;margin:8px 0 6px}
+    input[type="text"],input[type="number"]{width:100%;min-width:80px;background:var(--ink);color:var(--text);
+      border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;margin:0 0 6px}
+    .btn{background:linear-gradient(90deg,var(--brand),var(--brand2));color:#0b0d10;border:0;border-radius:10px;
+         padding:10px 14px;font-weight:700;cursor:pointer}
+    .btn.secondary{background:#0f1318;color:var(--text);border:1px solid var(--border)}
+    .btn.delete{background:#2a193f;color:#ffdede;border:1px solid rgba(255,0,0,.25)}
+    .offer-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin-bottom:10px}
+    .offer-row .col{display:flex;flex-direction:column}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:14px}
+    .kpi{background:var(--ink);border:1px solid var(--border);border-radius:12px;padding:12px}
+    .kpi .label{color:var(--muted);font-size:12px}
+    .kpi .val{font-size:20px;margin-top:2px}
+    table{width:100%;border-collapse:collapse;margin-top:14px}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:right}
+    th:first-child,td:first-child{text-align:left}
+    th{color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>RepEats Revenue Calculator</h1>
+    <p class="lead">Set accounts, posting volume, views, CTR & CVR (enter as % only). Add/remove offers; we’ll normalise the mix and compute clicks, orders, revenue, and £/1,000 views.</p>
+
+    <div class="grid grid-2">
+      <!-- Inputs -->
+      <section class="card">
+        <h2>Inputs</h2>
+
+        <label for="accounts">Active Accounts Posting</label>
+        <input id="accounts" type="number" min="0" step="1" value="6" />
+
+        <label for="ppm">Posts per Month (per account)</label>
+        <input id="ppm" type="number" min="0" step="1" value="60" />
+
+        <label for="viewsPerPost">Views per Post</label>
+        <input id="viewsPerPost" type="number" min="0" step="100" value="10000" />
+
+        <label for="monthlyViews">Total Monthly Views (override)</label>
+        <input id="monthlyViews" type="number" min="0" step="1000" value="0" />
+
+        <label for="ctr">CTR (%) — enter 1 for 1%</label>
+        <input id="ctr" type="number" min="0" max="100" step="0.01" value="1" />
+
+        <label for="cvr">CVR (%) — enter 2 for 2%</label>
+        <input id="cvr" type="number" min="0" max="100" step="0.01" value="2" />
+
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn secondary" id="reset">Reset</button>
+          <button class="btn secondary" id="save">Save</button>
+          <button class="btn secondary" id="load">Load</button>
+        </div>
+        <p class="lead" style="margin-top:10px;font-size:12px">
+          Tip: leave “Total Monthly Views” at 0 to use Accounts × Posts × Views/Post.
+        </p>
+      </section>
+
+      <!-- Offers -->
+      <section class="card">
+        <h2>Offers</h2>
+        <div id="offersWrap"></div>
+        <button class="btn" id="addOffer" style="margin-top:8px">+ Add Offer</button>
+        <p class="lead" style="margin-top:10px;font-size:12px">
+          Mix % auto-normalises in calculations; it doesn’t need to total 100 exactly.
+        </p>
+      </section>
+    </div>
+
+    <!-- Results -->
+    <section class="card" style="margin-top:20px">
+      <h2>Results</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Total Posts / Month</div><div class="val" id="k_posts">—</div></div>
+        <div class="kpi"><div class="label">Total Monthly Views</div><div class="val" id="k_views">—</div></div>
+        <div class="kpi"><div class="label">Clicks</div><div class="val" id="k_clicks">—</div></div>
+        <div class="kpi"><div class="label">Orders</div><div class="val" id="k_orders">—</div></div>
+        <div class="kpi"><div class="label">Blended AOV</div><div class="val" id="k_aov">—</div></div>
+        <div class="kpi"><div class="label">£ per 1,000 Views</div><div class="val" id="k_rpmv">—</div></div>
+        <div class="kpi" style="grid-column:1/-1"><div class="label">Revenue (Total)</div><div class="val" id="k_revenue">—</div></div>
+      </div>
+
+      <table id="breakdown">
+        <thead>
+          <tr><th>Offer</th><th>Mix % (normalised)</th><th>Orders</th><th>AOV (£)</th><th>Revenue</th></tr>
+        </thead>
+        <tbody id="breakdownBody"></tbody>
+        <tfoot>
+          <tr><th>Total</th><th id="mixTotal">100%</th><th id="ordersTotal">—</th><th id="aovBlend">—</th><th id="revTotal">—</th></tr>
+        </tfoot>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    // Utilities
+    const $ = id => document.getElementById(id);
+    const gbp = n => new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:2}).format(n||0);
+    const int = n => new Intl.NumberFormat('en-GB').format(Math.round(n||0));
+
+    // State
+    let offers = [
+      { name:"Offer 1 — BOGO", aov:10, mix:35 },
+      { name:"Offer 2 — Bundle Builder", aov:28, mix:40 },
+      { name:"Offer 3 — 3-for-£25", aov:25, mix:25 }
+    ];
+
+    function renderOffers(){
+      const wrap = $('offersWrap');
+      wrap.innerHTML = '';
+      offers.forEach((o,i)=>{
+        const row = document.createElement('div');
+        row.className = 'offer-row';
+        row.innerHTML = `
+          <div class="col">
+            <label for="offer-name-${i}">Offer Name</label>
+            <input id="offer-name-${i}" type="text" value="${o.name}"
+              oninput="offers[${i}].name=this.value; compute();">
+          </div>
+          <div class="col">
+            <label for="offer-aov-${i}">AOV (£)</label>
+            <input id="offer-aov-${i}" type="number" step="0.01" value="${o.aov}"
+              oninput="offers[${i}].aov=parseFloat(this.value)||0; compute();">
+          </div>
+          <div class="col">
+            <label for="offer-mix-${i}">Mix %</label>
+            <input id="offer-mix-${i}" type="number" step="0.1" value="${o.mix}"
+              oninput="offers[${i}].mix=parseFloat(this.value)||0; compute();">
+          </div>
+          <div class="actions">
+            <button class="btn delete" onclick="deleteOffer(${i})">Delete</button>
+          </div>
+        `;
+        wrap.appendChild(row);
+      });
     }
 
-    * {
-      box-sizing: border-box;
+    function addOffer(){ offers.push({name:'New Offer', aov:20, mix:10}); renderOffers(); compute(); }
+    function deleteOffer(i){ offers.splice(i,1); renderOffers(); compute(); }
+
+    // Percent inputs (CTR/CVR) are treated as % only
+    function pctFromPercentField(id){
+      let v = parseFloat($(id).value);
+      if(!isFinite(v) || v < 0) v = 0;
+      if(v > 100) v = 100;
+      $(id).value = v;           // clamp UI value
+      return v / 100;            // convert to decimal for math
     }
 
-    body {
-      margin: 0;
-      background: linear-gradient(180deg, #0b0d10, #0e1217);
-      color: var(--text);
-      font: 400 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+    function compute(){
+      const accounts = parseFloat($('accounts').value)||0;
+      const ppm      = parseFloat($('ppm').value)||0;
+      const vpp      = parseFloat($('viewsPerPost').value)||0;
+      const mv       = parseFloat($('monthlyViews').value)||0;
+
+      // NEW: percentages-only
+      const ctr      = pctFromPercentField('ctr'); // 1 -> 0.01
+      const cvr      = pctFromPercentField('cvr'); // 2 -> 0.02
+
+      const posts  = accounts * ppm;
+      const views  = mv>0 ? mv : posts * vpp;
+      const clicks = views * ctr;
+      const orders = clicks * cvr;
+
+      // Normalise mix
+      const sumMix = offers.reduce((s,o)=>s+(parseFloat(o.mix)||0),0) || 1;
+      const norm   = offers.map(o=>({...o, norm:(parseFloat(o.mix)||0)/sumMix}));
+
+      const blendedAOV = norm.reduce((s,o)=>s + (parseFloat(o.aov)||0)*o.norm, 0);
+      const revenue    = orders * blendedAOV;
+      const rpmv       = views>0 ? (revenue/views)*1000 : 0;
+
+      // KPIs
+      $('k_posts').textContent   = int(posts);
+      $('k_views').textContent   = int(views);
+      $('k_clicks').textContent  = int(clicks);
+      $('k_orders').textContent  = orders.toFixed(2);
+      $('k_aov').textContent     = gbp(blendedAOV);
+      $('k_rpmv').textContent    = gbp(rpmv);
+      $('k_revenue').textContent = gbp(revenue);
+
+      // Breakdown
+      const body = $('breakdownBody'); body.innerHTML='';
+      norm.forEach(o=>{
+        const ord = orders * o.norm;
+        const rev = ord * (parseFloat(o.aov)||0);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${o.name}</td>
+          <td>${(o.norm*100).toFixed(1)}%</td>
+          <td>${ord.toFixed(2)}</td>
+          <td>${gbp(parseFloat(o.aov)||0)}</td>
+          <td>${gbp(rev)}</td>
+        `;
+        body.appendChild(tr);
+      });
+      $('mixTotal').textContent    = '100%';
+      $('ordersTotal').textContent = orders.toFixed(2);
+      $('aovBlend').textContent    = gbp(blendedAOV);
+      $('revTotal').textContent    = gbp(revenue);
     }
 
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 32px;
+    // Save / Load / Reset (localStorage)
+    function save(){
+      const state = {
+        accounts:$('accounts').value, ppm:$('ppm').value,
+        viewsPerPost:$('viewsPerPost').value, monthlyViews:$('monthlyViews').value,
+        ctr:$('ctr').value, cvr:$('cvr').value, offers
+      };
+      localStorage.setItem('repeats_calc_dynamic_v3', JSON.stringify(state));
+      alert('Saved!');
+    }
+    function load(){
+      const raw = localStorage.getItem('repeats_calc_dynamic_v3');
+      if(!raw) return alert('No saved inputs found.');
+      const s = JSON.parse(raw);
+      ['accounts','ppm','viewsPerPost','monthlyViews','ctr','cvr'].forEach(k=>{
+        if($(k) && s[k]!=null) $(k).value = s[k];
+      });
+      offers = Array.isArray(s.offers)&&s.offers.length ? s.offers : offers;
+      renderOffers(); compute();
+    }
+    function resetAll(){
+      $('accounts').value=6; $('ppm').value=60; $('viewsPerPost').value=10000; $('monthlyViews').value=0;
+      $('ctr').value=1; $('cvr').value=2; // percent style
+      offers = [
+        { name:"Offer 1 — BOGO", aov:10, mix:35 },
+        { name:"Offer 2 — Bundle Builder", aov:28, mix:40 },
+        { name:"Offer 3 — 3-for-£25", aov:25, mix:25 }
+      ];
+      renderOffers(); compute();
     }
 
-    h1 {
-      margin: 0 0 16px;
-      font-size: 28px;
-    }
+    // Wire up
+    ['accounts','ppm','viewsPerPost','monthlyViews','ctr','cvr'].forEach(id=>{
+      $(id).addEventListener('input', compute);
+      $(id).addEventListener('change', compute);
+    });
+    $('addOffer').addEventListener('click', addOffer);
+    $('save').addEventListener('click', save);
+    $('load').addEventListener('click', load);
+    $('reset').addEventListener('click', resetAll);
 
-    h2 {
-      margin: 0 0 12px;
-      font-size: 20px;
-    }
-
-    p {
-      margin: 0 0 20px;
-      color: var(--muted);
-    }
-
-    .grid {
-      display: grid;
-      grid-gap: 20px;
-    }
-
-    @media (min-width: 900px) {
-      .grid-cols-2 {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    .card {
-      background: var(--card);
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-      overflow-x: auto;
-    }
-
-    label {
-      font-size: 14px;
-      display: block;
-      margin-bottom: 6px;
-    }
-
-    input[type="number"], input[type="text"] {
-      width: 100%;
-      min-width: 80px;
-      padding: 8px 10px;
-      font-size: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      background: #0f1318;
-      color: var(--text);
-      margin-bottom: 12px;
-    }
-
-    button {
-      background: linear-gradient(90deg, var(--brand), var(--brand2));
-      border: none;
-      border-radius: 8px;
-      padding: 10px 16px;
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-      margin-top: 8px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    // Init
+    renderOffers();
+    compute();
+  </script>
+</body>
+</html>
