@@ -38,12 +38,13 @@
     th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:right}
     th:first-child,td:first-child{text-align:left}
     th{color:var(--muted);font-size:13px}
+    .funnel-note{background:var(--ink);border-radius:8px;padding:12px;margin:12px 0;font-size:13px;color:var(--muted)}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>RepEats Revenue Calculator</h1>
-    <p class="lead">Set accounts, posting volume, views, CTR & CVR (enter as % only). Add/remove offers; we’ll normalise the mix and compute clicks, orders, revenue, and £/1,000 views.</p>
+    <p class="lead">Set accounts, posting volume, views, profile visit rate, CTR & CVR (enter as % only). Add/remove offers; we'll compute the full funnel and revenue.</p>
 
     <div class="grid grid-2">
       <!-- Inputs -->
@@ -62,11 +63,19 @@
         <label for="monthlyViews">Total Monthly Views (override)</label>
         <input id="monthlyViews" type="number" min="0" step="1000" value="0" />
 
-        <label for="ctr">CTR (%) — enter 1 for 1%</label>
-        <input id="ctr" type="number" min="0" max="100" step="0.01" value="1" />
+        <div class="funnel-note">
+          <strong>Conversion Funnel Rates:</strong><br>
+          Views → Profile Visits → Bio Link Clicks → Orders
+        </div>
 
-        <label for="cvr">CVR (%) — enter 2 for 2%</label>
-        <input id="cvr" type="number" min="0" max="100" step="0.01" value="2" />
+        <label for="pvr">Profile Visit Rate (%) — enter 4 for 4%</label>
+        <input id="pvr" type="number" min="0" max="100" step="0.01" value="4" />
+
+        <label for="ctr">Bio Link CTR (%) — enter 15 for 15%</label>
+        <input id="ctr" type="number" min="0" max="100" step="0.01" value="15" />
+
+        <label for="cvr">CVR (%) — enter 1.5 for 1.5%</label>
+        <input id="cvr" type="number" min="0" max="100" step="0.01" value="1.5" />
 
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="btn secondary" id="reset">Reset</button>
@@ -74,7 +83,7 @@
           <button class="btn secondary" id="load">Load</button>
         </div>
         <p class="lead" style="margin-top:10px;font-size:12px">
-          Tip: leave “Total Monthly Views” at 0 to use Accounts × Posts × Views/Post.
+          Tip: leave "Total Monthly Views" at 0 to use Accounts × Posts × Views/Post.
         </p>
       </section>
 
@@ -84,7 +93,7 @@
         <div id="offersWrap"></div>
         <button class="btn" id="addOffer" style="margin-top:8px">+ Add Offer</button>
         <p class="lead" style="margin-top:10px;font-size:12px">
-          Mix % auto-normalises in calculations; it doesn’t need to total 100 exactly.
+          Mix % auto-normalises in calculations; it doesn't need to total 100 exactly.
         </p>
       </section>
     </div>
@@ -95,7 +104,8 @@
       <div class="kpis">
         <div class="kpi"><div class="label">Total Posts / Month</div><div class="val" id="k_posts">—</div></div>
         <div class="kpi"><div class="label">Total Monthly Views</div><div class="val" id="k_views">—</div></div>
-        <div class="kpi"><div class="label">Clicks</div><div class="val" id="k_clicks">—</div></div>
+        <div class="kpi"><div class="label">Profile Visits</div><div class="val" id="k_profile_visits">—</div></div>
+        <div class="kpi"><div class="label">Bio Link Clicks</div><div class="val" id="k_clicks">—</div></div>
         <div class="kpi"><div class="label">Orders</div><div class="val" id="k_orders">—</div></div>
         <div class="kpi"><div class="label">Blended AOV</div><div class="val" id="k_aov">—</div></div>
         <div class="kpi"><div class="label">£ per 1,000 Views</div><div class="val" id="k_rpmv">—</div></div>
@@ -160,7 +170,7 @@
     function addOffer(){ offers.push({name:'New Offer', aov:20, mix:10}); renderOffers(); compute(); }
     function deleteOffer(i){ offers.splice(i,1); renderOffers(); compute(); }
 
-    // Percent inputs (CTR/CVR) are treated as % only
+    // Percent inputs are treated as % only
     function pctFromPercentField(id){
       let v = parseFloat($(id).value);
       if(!isFinite(v) || v < 0) v = 0;
@@ -175,14 +185,16 @@
       const vpp      = parseFloat($('viewsPerPost').value)||0;
       const mv       = parseFloat($('monthlyViews').value)||0;
 
-      // NEW: percentages-only
-      const ctr      = pctFromPercentField('ctr'); // 1 -> 0.01
-      const cvr      = pctFromPercentField('cvr'); // 2 -> 0.02
+      // Conversion funnel rates (percentages converted to decimals)
+      const pvr      = pctFromPercentField('pvr'); // Profile visit rate
+      const ctr      = pctFromPercentField('ctr'); // Bio link CTR
+      const cvr      = pctFromPercentField('cvr'); // Conversion rate
 
-      const posts  = accounts * ppm;
-      const views  = mv>0 ? mv : posts * vpp;
-      const clicks = views * ctr;
-      const orders = clicks * cvr;
+      const posts          = accounts * ppm;
+      const views          = mv > 0 ? mv : posts * vpp;
+      const profileVisits  = views * pvr;
+      const clicks         = profileVisits * ctr;
+      const orders         = clicks * cvr;
 
       // Normalise mix
       const sumMix = offers.reduce((s,o)=>s+(parseFloat(o.mix)||0),0) || 1;
@@ -193,13 +205,14 @@
       const rpmv       = views>0 ? (revenue/views)*1000 : 0;
 
       // KPIs
-      $('k_posts').textContent   = int(posts);
-      $('k_views').textContent   = int(views);
-      $('k_clicks').textContent  = int(clicks);
-      $('k_orders').textContent  = orders.toFixed(2);
-      $('k_aov').textContent     = gbp(blendedAOV);
-      $('k_rpmv').textContent    = gbp(rpmv);
-      $('k_revenue').textContent = gbp(revenue);
+      $('k_posts').textContent           = int(posts);
+      $('k_views').textContent           = int(views);
+      $('k_profile_visits').textContent  = int(profileVisits);
+      $('k_clicks').textContent          = int(clicks);
+      $('k_orders').textContent          = orders.toFixed(2);
+      $('k_aov').textContent             = gbp(blendedAOV);
+      $('k_rpmv').textContent            = gbp(rpmv);
+      $('k_revenue').textContent         = gbp(revenue);
 
       // Breakdown
       const body = $('breakdownBody'); body.innerHTML='';
@@ -227,16 +240,16 @@
       const state = {
         accounts:$('accounts').value, ppm:$('ppm').value,
         viewsPerPost:$('viewsPerPost').value, monthlyViews:$('monthlyViews').value,
-        ctr:$('ctr').value, cvr:$('cvr').value, offers
+        pvr:$('pvr').value, ctr:$('ctr').value, cvr:$('cvr').value, offers
       };
-      localStorage.setItem('repeats_calc_dynamic_v3', JSON.stringify(state));
+      localStorage.setItem('repeats_calc_dynamic_v4', JSON.stringify(state));
       alert('Saved!');
     }
     function load(){
-      const raw = localStorage.getItem('repeats_calc_dynamic_v3');
+      const raw = localStorage.getItem('repeats_calc_dynamic_v4');
       if(!raw) return alert('No saved inputs found.');
       const s = JSON.parse(raw);
-      ['accounts','ppm','viewsPerPost','monthlyViews','ctr','cvr'].forEach(k=>{
+      ['accounts','ppm','viewsPerPost','monthlyViews','pvr','ctr','cvr'].forEach(k=>{
         if($(k) && s[k]!=null) $(k).value = s[k];
       });
       offers = Array.isArray(s.offers)&&s.offers.length ? s.offers : offers;
@@ -244,7 +257,7 @@
     }
     function resetAll(){
       $('accounts').value=6; $('ppm').value=60; $('viewsPerPost').value=10000; $('monthlyViews').value=0;
-      $('ctr').value=1; $('cvr').value=2; // percent style
+      $('pvr').value=4; $('ctr').value=15; $('cvr').value=1.5; // Updated defaults based on TikTok research
       offers = [
         { name:"Offer 1 — BOGO", aov:10, mix:35 },
         { name:"Offer 2 — Bundle Builder", aov:28, mix:40 },
@@ -254,7 +267,7 @@
     }
 
     // Wire up
-    ['accounts','ppm','viewsPerPost','monthlyViews','ctr','cvr'].forEach(id=>{
+    ['accounts','ppm','viewsPerPost','monthlyViews','pvr','ctr','cvr'].forEach(id=>{
       $(id).addEventListener('input', compute);
       $(id).addEventListener('change', compute);
     });
